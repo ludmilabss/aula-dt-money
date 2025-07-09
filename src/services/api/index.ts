@@ -11,20 +11,27 @@ export const api = axios.create({
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response){
+        if (error.response) {
             const { status, data } = error.response;
             if (status === 401) {
                 console.error('Acesso não autorizado - verifique suas credenciais.');
             } else if (status === 404) {
-                console.error('Recurso não encontrado - verifique a URL solicitada.');
+                console.error('Recurso não encontrado - verifique a URL solicitada e o ID.');
             } else if (status === 500) {
                 console.error('Erro Interno do Servidor - tente novamente mais tarde.');
             } else if (status === 400) {
-                console.error(`Status: ${status} - ${data.message || 'Requisição inválida'}`);
+                console.error(`Requisição inválida: ${data.message || 'Dados incorretos.'}`);
+            } else {
+                console.error(`Erro ${status}: ${data.message || 'Ocorreu um erro na resposta do servidor.'}`);
             }
-            else {
-                console.error(`Error: ${data.message || 'Um erro de rede ou servidor indisponível'}`);
-            }
+        } 
+        else if (error.request) {
+            console.error('Erro de rede: Nenhuma resposta recebida do servidor. Verifique sua conexão e se o servidor está online.');
+        } 
+        else {
+            console.error('Erro inesperado:', error.message);
         }
+
+        return Promise.reject(error);
     }
 )

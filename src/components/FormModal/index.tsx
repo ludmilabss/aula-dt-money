@@ -4,12 +4,13 @@ import { TransactionSwitcher } from "../TransactionSwitcher";
 import { ITransaction } from "@/types/transaction";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
-// Validação do formulário
+import { useEffect } from "react";
+import { on } from "events";
 
 export interface IFormModalProps {
-    formTitle: string;
     closeModal: () => void;
-    addTransaction: (transaction: ITransaction) => void;
+    onSave: (transaction: ITransaction) => void;
+    editTransaction: ITransaction | null;
 }
 
 const transactionSchema = object({
@@ -22,40 +23,46 @@ const transactionSchema = object({
   category: string()
     .required('A Categoria é obrigatória'),
   price: number()
+    .transform((value) => (isNaN(value) ? 0 : value))
     .required('O Preço é obrigatório')
     .positive('O preço deve ser um número positivo')
     .min(0.01, 'O preço deve ser maior que zero'),
-  data: date()
-    .required('A Data é obrigatória')
-    .default(() => new Date())
 })
 
-type ITransactionForm = InferType<typeof transactionSchema>
+type ITransactionForm = Omit<InferType<typeof transactionSchema>, 'data'>;
 
 const transactionFormDefaultValues: ITransactionForm = {
   title: '',
   type: 'INCOME',
   category: '',
   price: 0,
-  data: new Date()
 }
 
 type TransactionType = 'INCOME' | 'OUTCOME';
 
 
-export function FormModal({formTitle, closeModal, addTransaction}: IFormModalProps){
-    // Função para lidar com o envio do formulário
+export function FormModal({closeModal, onSave, editTransaction}: IFormModalProps){
+
+    const isEditMode = !!editTransaction;
 
     const {
       handleSubmit,
       setValue,
       watch,
       register,
-      formState: { errors }
+      reset,
+      formState: { errors, isSubmitting }
     } = useForm<ITransactionForm>({
-      defaultValues: transactionFormDefaultValues,
       resolver: yupResolver(transactionSchema)
     })
+
+    useEffect(() => {
+        if (isEditMode) {
+            reset(editTransaction);
+        } else {
+            reset(transactionFormDefaultValues);
+        }
+    }, [editTransaction, isEditMode, reset]);
 
     const handleSetType = (type: 'INCOME' | 'OUTCOME') => {
       setValue('type', type);
@@ -64,9 +71,12 @@ export function FormModal({formTitle, closeModal, addTransaction}: IFormModalPro
     const type = watch('type', 'INCOME');
 
     const onSubmit = (data: ITransactionForm) => {
-      addTransaction(data as ITransaction);
-      closeModal();
-    }
+      onSave({
+        ...data,
+        id: editTransaction?.id, 
+        data: editTransaction?.data || new Date(), 
+      } as ITransaction);
+    };
     
 
     return (
@@ -76,7 +86,6 @@ export function FormModal({formTitle, closeModal, addTransaction}: IFormModalPro
   <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
     <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">     
       <div className="relative transform overflow-hidden rounded-lg bg-modal text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
-        {/* Botão de fechamento "X" */}
         <button 
           type="button" 
           className="absolute top-0 right-0 mt-4 mr-4 text-gray-400 hover:text-gray-600" 
@@ -87,7 +96,9 @@ export function FormModal({formTitle, closeModal, addTransaction}: IFormModalPro
         <div className="bg-modal px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
           <div className="sm:flex sm:items-start">            
             <div className="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
-              <h1 className="font-semibold leading-9 text-title text-2xl" id="modal-title">{formTitle}</h1>              
+              <h1 className="font-semibold leading-9 text-title text-2xl" id="modal-title">
+                {isEditMode ? 'Editar Transação' : 'Adicionar Transação'}  
+              </h1>              
             </div>
           </div>
         </div>
@@ -101,9 +112,15 @@ export function FormModal({formTitle, closeModal, addTransaction}: IFormModalPro
             <Input type="text" placeholder="Categoria" {...register("category")} />
             {errors.category && <span className="text-red-500">{errors.category.message}</span>}
             
-            <div className="bg-modal px-12 py-3 flex sm:flex-row-reverse w-full mb-11">          
-              <button type="submit" className="mt-3 w-full justify-center rounded-md bg-income text-white px-3 py-5 text-normal font-semibold shadow-sm hover:opacity-80 sm:mt-0">Confirmar</button>
-            </div>
+            <div className="bg-modal px-12 py-3 flex sm:flex-row-reverse w-full mb-11">           
+                      <button 
+                        type="submit" 
+                        disabled={isSubmitting} 
+                        className="mt-3 w-full justify-center rounded-md bg-income text-white px-3 py-5 text-normal font-semibold shadow-sm hover:opacity-80 sm:mt-0 disabled:opacity-50"
+                      >
+                        {isSubmitting ? 'Salvando...' : (isEditMode ? 'Salvar Alterações' : 'Confirmar')}
+                      </button>
+                    </div>
         </form>
         
       </div>
