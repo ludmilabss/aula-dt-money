@@ -1,25 +1,39 @@
 "use client";
+import { useMemo, useState, useEffect } from "react";
 import { BodyContainer } from "@/components/BodyContainer";
 import { CardContainer } from "@/components/CardContainer";
 import { FormModal } from "@/components/FormModal";
 import { Header } from "@/components/Header";
 import { Table } from "@/components/Table";
-import { useTransactions } from "@/hooks/transactions"; 
+import { DeleteModal } from "@/components/DeleteModal";
+import { useTransactions } from "@/hooks/transactions";
 import { ITotal, ITransaction } from "@/types/transaction";
-import { useMemo, useState } from "react";
 import { ToastContainer } from "react-toastify";
-import { DeleteModal } from "@/components/DeleteModal"; 
 
 export default function Home() {
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<ITransaction | null>(null);
   const [transactionIdToDelete, setTransactionIdToDelete] = useState<string | null>(null);
 
-  const { data: transactions, isLoading } = useTransactions.ListAll();
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    status,
+  } = useTransactions.ListAll();
+
   const { mutateAsync: addTransaction } = useTransactions.Create();
   const { mutateAsync: updateTransaction } = useTransactions.Update();
   const { mutateAsync: deleteTransaction } = useTransactions.Delete();
+
+  const transactions = useMemo(() => data?.pages.flatMap(page => page.data) ?? [], [data]);
 
   const handleOpenCreateModal = () => {
     setTransactionToEdit(null); 
@@ -49,7 +63,7 @@ export default function Home() {
     }
   };
 
-  const handleOpenDeleteModal = (id: string) => {
+  const handleOpenDeleteModal = (id: string): void => {
     setTransactionIdToDelete(id);
     setIsDeleteModalOpen(true);
   };
@@ -75,7 +89,10 @@ export default function Home() {
       return { totalIncome: 0, totalOutcome: 0, total: 0 };
     }
     return transactions.reduce(
-      (acc: ITotal, { type, price }: ITransaction) => {
+      (acc: ITotal, transaction) => {
+        if (!transaction.type || !transaction.price) return acc; 
+
+        const { type, price } = transaction;
         if (type === 'INCOME') {
           acc.totalIncome += Number(price);
           acc.total += Number(price);
@@ -89,7 +106,11 @@ export default function Home() {
     );
   }, [transactions]);
 
-  if (isLoading) return <div>Loading...</div>;
+  if (!isClient || status === 'pending') {
+    return <div className="text-center mt-10">Carregando...</div>;
+  }
+
+  if (status === 'error') return <div className="text-center mt-10">Erro ao carregar dados.</div>;
 
   return (
     <div>
@@ -97,9 +118,24 @@ export default function Home() {
       <Header openModal={handleOpenCreateModal} />
       <BodyContainer>
         <CardContainer totals={totalTransactions} />
-        <Table data={transactions || []} onOpenDeleteModal={handleOpenDeleteModal} onOpenEditModal={handleOpenEditModal} />
-        { isFormModalOpen && <FormModal closeModal={handleCloseFormModal} onSave={handleSaveTransaction} editTransaction={transactionToEdit} /> }
-        { isDeleteModalOpen && ( <DeleteModal onConfirm={handleDeleteTransaction} onClose={handleCloseDeleteModal} /> )}
+        <Table data={transactions} onOpenDeleteModal={handleOpenDeleteModal} onOpenEditModal={handleOpenEditModal} />
+        
+        <div className="mt-8 mb-8 text-center">
+          <button
+            onClick={() => fetchNextPage()}
+            disabled={!hasNextPage || isFetchingNextPage}
+            className="px-6 py-3 font-semibold text-white bg-income rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isFetchingNextPage
+              ? 'Carregando mais...'
+              : hasNextPage
+              ? 'Carregar mais'
+              : 'Fim das transações'}
+          </button>
+        </div>
+
+        {isFormModalOpen && <FormModal closeModal={handleCloseFormModal} onSave={handleSaveTransaction} editTransaction={transactionToEdit} />}
+        {isDeleteModalOpen && <DeleteModal onConfirm={handleDeleteTransaction} onClose={handleCloseDeleteModal} />}
       </BodyContainer>
     </div>
   );

@@ -1,10 +1,23 @@
 import { ITransaction } from "@/types/transaction";
 import { api } from "../api";
 
-export async function getTransactions(): Promise<ITransaction[]> {
+export interface PaginatedResponse {
+  data: ITransaction[];
+  page: number;
+  totalPages: number;
+  total: number;
+  limit: number;
+}
+
+export async function getTransactions({ pageParam = 1 }): Promise<PaginatedResponse> {
   try {
-    const response = await api.get('/transaction');
-    return response.data.transactions || response.data || []; 
+    const response = await api.get('/transaction', {
+      params: {
+        page: pageParam,
+        limit: 5, 
+      },
+    });
+    return response.data; 
   } catch (error) {
     console.error("Erro ao buscar transações:", error);
     throw new Error("Não foi possível buscar as transações.");
